@@ -44,3 +44,34 @@ def get_resume_improvement_suggestions(resume_text, job_description, missing_ski
     
     except Exception as e:
         return f"Error generating suggestions: {str(e)}"
+
+
+@st.cache_data(show_spinner=False)
+def generate_tailored_resume(resume_text, job_description, missing_skills=None):
+    skills_notes = (
+        f"\nInclude the following missing skills only if the resume logically supports them: {', '.join(missing_skills)}"
+        if missing_skills else ""
+    )
+
+    prompt = f"""
+    You are a professional resume editor. Improve the following resume to better match the job description. 
+    Ensure the resume remains truthful and professional. {skills_notes}
+
+    Resume:
+    {resume_text}
+
+    Job Description:
+    {job_description}
+
+    Return the improved resume only.
+    """
+
+    response = openai.ChatCompletion.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.7
+    )
+
+    return response.choices[0].message.content.strip()
+
+

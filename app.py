@@ -1,4 +1,3 @@
-# === app.py ===
 import streamlit as st
 import torch
 import plotly.graph_objects as go
@@ -12,14 +11,15 @@ from matcher import (
     get_tfidf_vectors,
     generate_resume_suggestions,
 )
-from llm_utils import get_resume_improvement_suggestions
+from llm_utils import get_resume_improvement_suggestions, generate_tailored_resume
+from export_utils import export_as_docx, export_as_pdf
 
 torch.classes.__path__ = []
 
 st.set_page_config(page_title="AI Resume Matcher", layout="centered")
 st.title("AI Resume to Job Matcher")
 
-# === Resume Upload ===
+# Resume Upload 
 resume_file = st.file_uploader("Upload your resume (.pdf or .docx)", type=["pdf", "docx"])
 resume_text = ""
 
@@ -27,7 +27,7 @@ if resume_file:
     resume_text = extract_resume_text(resume_file)
     st.success("Resume uploaded and processed!")
 
-# === Job Descriptions Input ===
+# Job Descriptions Input 
 st.subheader("Enter Job Descriptions (up to 5)")
 num_jobs = st.number_input("Number of jobs", min_value=1, max_value=5, value=1, step=1)
 
@@ -39,13 +39,13 @@ for i in range(num_jobs):
         if title and description:
             job_entries.append((title, description))
 
-# === Matching Method Selector ===
+# Matching Method Selector 
 method = st.radio("Choose Matching Method", ["TF-IDF", "BERT"], horizontal=True)
 
-# === Toggle for AI Suggestions ===
+# Toggle for AI Suggestions 
 use_ai_suggestions = st.checkbox("Enable AI Resume Suggestions", value=True)
 
-# === Match Button Logic ===
+# Match Button Logic 
 if st.button("Match Resume to Jobs"):
     if not resume_text:
         st.error("Please upload a resume first!")
@@ -67,7 +67,7 @@ if st.button("Match Resume to Jobs"):
             st.write(f"**{i + 1}. {title}** - Match Score: {round(score * 100, 2)}%")
             st.text_area("Job Preview", desc[:500] + "...", height=150)
 
-            # === Top Matching Keywords (TF-IDF Only) ===
+            # Top Matching Keywords (TF-IDF Only)
             if method == "TF-IDF":
                 job_index = jd_texts.index(desc) + 1
                 keywords = get_top_matched_keywords(tfidf_matrix, feature_names, resume_index=0, job_index=job_index, top_n=10)
@@ -75,7 +75,7 @@ if st.button("Match Resume to Jobs"):
                 for word, kw_score in keywords:
                     st.write(f"• {word} — `{round(kw_score, 4)}`")
 
-            # === Skill Gap Analysis ===
+            # Skill Gap Analysis 
             missing_skills = find_skill_gaps(resume_text, desc)
             if missing_skills:
                 st.warning(f"Missing skills for this role: {', '.join(missing_skills)}")
@@ -88,7 +88,7 @@ if st.button("Match Resume to Jobs"):
             else:
                 st.success("All key skills matched for this job!")
 
-            # === Radar Chart Explanation ===
+            # Radar Chart Explanation 
             total_skills = len(set(extract_skills(desc)))
             matched_skills = total_skills - len(missing_skills) if total_skills > 0 else 0
             skill_match_pct = (matched_skills / total_skills) * 100 if total_skills > 0 else 0
@@ -109,3 +109,55 @@ if st.button("Match Resume to Jobs"):
             fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 100])), showlegend=False)
 
             st.plotly_chart(fig, use_container_width=True)
+
+            # Tailored Resume Generation and Export
+            st.subheader("Generate Tailored Resume")
+
+            selected_job_title = st.selectbox(
+                "Select a job to tailor your resume for", [title for title, _ in job_entries]
+            )
+            selected_job_desc = next(
+                desc for title, desc in job_entries if title == selected_job_title
+            )
+
+            if st.button("Generate Tailored Resume"):
+                with st.spinner("Generating tailored resume..."):
+                    tailored_resume, changes_summary = generate_tailored_resume(
+                        resume_text, selected_job_desc
+                    )
+
+                    st.markdown("**Changes Made:**")
+                    st.code(changes_summary, language="markdown")
+
+                    # Save version history in session state
+                    if "version_history" not in st.session_state:
+                        st.session_state.version_history = []
+                    st.session_state.version_history.append(
+                        {
+                            "job_title": selected_job_title,
+                            "changes": changes_summary,
+                            "resume": tailored_resume,
+                        }
+                    )
+
+                    st.markdown("**Tailored Resume Preview:**")
+                    st.text_area("Tailored Resume", tailored_resume, height=300)
+
+                    format_choice = st.radio("Export format", ["DOCX", "PDF"], horizontal=True)
+
+                    if st.button("Download Tailored Resume"):
+                        filename = f"Tailored_Resume_for_{selected_job_title.replace(' ', '_')}"
+                        if format_choice == "DOCX":
+                            export_as_docx(tailored_resume, filename + ".docx")
+                        else:
+                            export_as_pdf(tailored_resume, filename + ".pdf")
+
+# Tailored Resume Version History
+if "version_history" in st.session_state and st.session_state.version_history:
+    st.subheader("Resume Tailoring History")
+    for idx, version in enumerate(reversed(st.session_state.version_history)):
+        with st.expander(f"Version {len(st.session_state.version_history) - idx}: {version['job_title']}"):
+            st.markdown("**Changes Made:**")
+            st.code(version["changes"], language="markdown")
+            st.markdown("**Tailored Resume:**")
+            st.text_area("Tailored Resume Snapshot", version["resume"], height=300, disabled=True)
