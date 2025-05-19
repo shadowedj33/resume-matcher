@@ -9,9 +9,8 @@ from matcher import (
     get_top_matched_keywords,
     extract_skills,
     get_tfidf_vectors,
-    generate_resume_suggestions,
 )
-from llm_utils import get_resume_improvement_suggestions, generate_tailored_resume
+from llm_utils import get_resume_improvement_suggestions, generate_tailored_resume_v2, highlight_resume_changes
 from export_utils import export_as_docx, export_as_pdf
 
 torch.classes.__path__ = []
@@ -110,47 +109,63 @@ if st.button("Match Resume to Jobs"):
 
             st.plotly_chart(fig, use_container_width=True)
 
-            # Tailored Resume Generation and Export
-            st.subheader("Generate Tailored Resume")
+        # Tailored Resume Generation and Export
+        st.subheader("Generate Tailored Resume")
 
-            selected_job_title = st.selectbox(
-                "Select a job to tailor your resume for", [title for title, _ in job_entries]
-            )
-            selected_job_desc = next(
-                desc for title, desc in job_entries if title == selected_job_title
-            )
+        selected_job_title = st.selectbox(
+            "Select a job to tailor your resume for", [title for title, _ in job_entries]
+        )
+        selected_job_desc = next(
+            desc for title, desc in job_entries if title == selected_job_title
+        )
 
-            if st.button("Generate Tailored Resume"):
-                with st.spinner("Generating tailored resume..."):
-                    tailored_resume, changes_summary = generate_tailored_resume(
-                        resume_text, selected_job_desc
-                    )
+        tailoring_intensity = st.radio(
+            "Tailoring Intensity",
+            options=["low", "medium", "high"],
+            index=1,
+            horizontal=True,
+        )
 
-                    st.markdown("**Changes Made:**")
-                    st.code(changes_summary, language="markdown")
+        highlight_changes = st.checkbox("Highlight Changes in Resume", value=True)
 
-                    # Save version history in session state
-                    if "version_history" not in st.session_state:
-                        st.session_state.version_history = []
-                    st.session_state.version_history.append(
-                        {
-                            "job_title": selected_job_title,
-                            "changes": changes_summary,
-                            "resume": tailored_resume,
-                        }
-                    )
+        export_format = st.radio("Export Format", options=["PDF", "DOCX"], horizontal=True)
 
-                    st.markdown("**Tailored Resume Preview:**")
-                    st.text_area("Tailored Resume", tailored_resume, height=300)
+        if st.button("Generate Tailored Resume"):
+            with st.spinner("Generating tailored resume..."):
+                tailored_resume = generate_tailored_resume_v2(
+                    resume_text, 
+                    selected_job_title,
+                    selected_job_desc,
+                    tailoring_intensity
+                )
 
-                    format_choice = st.radio("Export format", ["DOCX", "PDF"], horizontal=True)
+                changes_summary = highlight_resume_changes(resume_text, tailored_resume)
 
-                    if st.button("Download Tailored Resume"):
-                        filename = f"Tailored_Resume_for_{selected_job_title.replace(' ', '_')}"
-                        if format_choice == "DOCX":
-                            export_as_docx(tailored_resume, filename + ".docx")
-                        else:
-                            export_as_pdf(tailored_resume, filename + ".pdf")
+                st.markdown("**Changes Made:**")
+                st.code(changes_summary, language="markdown")
+
+                # Save version history in session state
+                if "version_history" not in st.session_state:
+                    st.session_state.version_history = []
+                st.session_state.version_history.append(
+                    {
+                        "job_title": selected_job_title,
+                        "changes": changes_summary,
+                        "resume": tailored_resume,
+                    }
+                )
+
+                st.markdown("**Tailored Resume Preview:**")
+                st.text_area("Tailored Resume", tailored_resume, height=300)
+
+                format_choice = st.radio("Export format", ["DOCX", "PDF"], horizontal=True)
+
+                if st.button("Download Tailored Resume"):
+                    filename = f"Tailored_Resume_for_{selected_job_title.replace(' ', '_')}"
+                    if format_choice == "DOCX":
+                        export_as_docx(tailored_resume, filename + ".docx")
+                    else:
+                        export_as_pdf(tailored_resume, filename + ".pdf")
 
 # Tailored Resume Version History
 if "version_history" in st.session_state and st.session_state.version_history:

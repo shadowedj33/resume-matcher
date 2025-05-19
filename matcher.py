@@ -2,10 +2,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sentence_transformers import SentenceTransformer
 import spacy
-import openai
-import os
 
-openai.api_key = os.getenv("OPENAI_API_KEY")
 nlp = spacy.load("en_core_web_sm")
 
 # Common skill list — replace or extend with spaCy-based extraction later
@@ -75,9 +72,10 @@ def bert_match(resume_text, job_texts):
     return list(zip(job_texts, similarity))
 
 # Resume suggestion generator
+"""
 def generate_resume_suggestions(missing_skills, job_description):
     if not missing_skills:
-        return "Your resume covres all key skills for this job."
+        return "Your resume covers all key skills for this job."
     
     skill_list = ", ".join(missing_skills)
     prompt = (
@@ -104,3 +102,4 @@ def generate_resume_suggestions(missing_skills, job_description):
         suggestions = f"Error generating suggestions: {str(e)}"
 
     return suggestions
+"""

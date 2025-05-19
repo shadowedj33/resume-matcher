@@ -1,11 +1,12 @@
 import os
-import openai
+from openai import OpenAI
 from dotenv import load_dotenv
 import streamlit as st
+import difflib
 
-load_dotenv()
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-openai.api_key = OPENAI_API_KEY
+load_dotenv(override=True)
+
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 @st.cache_data(show_spinner=False)
 def get_resume_improvement_suggestions(resume_text, job_description, missing_skills):
@@ -31,7 +32,7 @@ def get_resume_improvement_suggestions(resume_text, job_description, missing_ski
     """
 
     try:
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=500,
@@ -39,7 +40,7 @@ def get_resume_improvement_suggestions(resume_text, job_description, missing_ski
             n=1,
             stop=None,
         )
-        suggestion = response['choices'][0]['message']['content'].strip()
+        suggestion = response.choices[0].message.content.strip()
         return suggestion
     
     except Exception as e:
@@ -66,7 +67,7 @@ def generate_tailored_resume(resume_text, job_description, missing_skills=None):
     Return the improved resume only.
     """
 
-    response = openai.ChatCompletion.create(
+    response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.7
@@ -75,3 +76,47 @@ def generate_tailored_resume(resume_text, job_description, missing_skills=None):
     return response.choices[0].message.content.strip()
 
 
+# Tailored Resume Generator V2
+@st.cache_data(show_spinner=False)
+def generate_tailored_resume_v2(resume_text, job_title, job_description, intensity="medium"):
+    prompt = f"""
+    You are a professional AI resume coach. A user is applyong for the job title "{job_title}" with the following job description:
+    ---
+    {job_description}
+    ---
+
+    The user's current resume is as follows:
+    ---
+    {resume_text}
+    ---
+    Tailor the resume by updating only relevant sections (Summary, Experience, Skills), keeping other sections unchanged.
+    Add missing skills and improve keyword relevance without sounding robotic.
+    Tailoring intensity: {intensity.upper()}.
+    Return the full tailored resume content. 
+    """
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.7,
+    )
+
+    return response.choices[0].message.content.strip()
+
+
+# Highlight changes in resume
+def highlight_resume_changes(original: str, modified: str) -> str:
+    """
+    Highlight differences between original and modified text.
+    Additions will be wrapped in **bold** for visibility.
+    """
+    diff = difflib.ndiff(original.split(), modified.split())
+    highlighted = []
+
+    for token in diff:
+        if token.startswith("+ "): # Added word
+            highlighted.append(f"**{token[2]}**")
+        elif token.startswith("  "): # Same word
+            highlighted.append(token[2])
+
+    return " ".join(highlighted)
